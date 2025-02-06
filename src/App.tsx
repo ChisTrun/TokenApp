@@ -13,20 +13,21 @@ const TOKEN_METADATA_PROGRAM_ID = new web3.PublicKey(
 );
 
 const metadataData = {
-  name: "Kappa",
-  symbol: "KAP",
-  uri: "https://raw.githubusercontent.com/ChisTrun/Peint/refs/heads/master/metadata.json",
+  name: "Mochii",
+  symbol: "MOC",
+  uri: "https://raw.githubusercontent.com/ChisTrun/Peint/refs/heads/master/Mochii.json",
   sellerFeeBasisPoints: 0,
   creators: null,
   collection: null,
   uses: null,
 };
 
-const network = web3.clusterApiUrl("mainnet-beta");
+const network = web3.clusterApiUrl("devnet");
 console.log("Network:", network);
 const provider = getProvider();
 const connection = new web3.Connection(
-  "https://muddy-distinguished-sea.solana-mainnet.quiknode.pro/d2b95ca59124154cce9ca521731e51dc72b06297/",
+  // "https://muddy-distinguished-sea.solana-mainnet.quiknode.pro/d2b95ca59124154cce9ca521731e51dc72b06297/",
+  network,
   "finalized"
 );
 
@@ -134,6 +135,72 @@ function App() {
     }
   };
 
+  const MintToken = async (
+    mintAddress: string,
+    payer: web3.PublicKey,
+    amount: number
+  ) => {
+    if (!walletPubkey || !provider) return;
+    try {
+      const mint = new web3.PublicKey(mintAddress);
+
+      const associatedTokenAccount = await token.getAssociatedTokenAddress(
+        mint, // Mint Address
+        payer, // Owner của Token Account
+        false // Cho phép ATA của tài khoản ví
+      );
+
+      const accountInfo = await connection.getAccountInfo(
+        associatedTokenAccount
+      );
+
+      const instructions: web3.TransactionInstruction[] = [];
+      if (!accountInfo) {
+        instructions.push(
+          token.createAssociatedTokenAccountInstruction(
+            payer, // Payer của phí
+            associatedTokenAccount, // ATA sẽ được tạo
+            payer, // Chủ sở hữu của ATA
+            mint // Mint Address
+          )
+        );
+      }
+
+      instructions.push(
+        token.createMintToCheckedInstruction(
+          mint, // mint
+          associatedTokenAccount, // receiver (ATA)
+          payer, // mint authority
+          amount * Math.pow(10, 9), // amount. Nếu decimals là 9, mint 10^9 cho 1 token.
+          9
+        )
+      );
+
+      // Tạo transaction
+      const transaction = new web3.Transaction().add(...instructions);
+      const { blockhash } = await connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = payer;
+
+      // Ký và gửi transaction
+      const { signature } = await provider.signAndSendTransaction(transaction);
+      await connection.getSignatureStatus(signature);
+
+      console.log("Token minted:", signature);
+    } catch (error) {
+      console.error("Error creating token:", (error as Error).message);
+    }
+  };
+
+  const handleMintToken = async () => {
+    if (!walletPubkey || !provider) return;
+    await MintToken(
+      "2Q6mWbhkHy9ASzWy1VrGZFUfCHqREMmYn5Ew73ffQMdk",
+      walletPubkey,
+      20
+    );
+  };
+
   const handleTransfer = async () => {
     if (!walletPubkey || !provider) return;
     try {
@@ -166,6 +233,7 @@ function App() {
         <div>
           <p>Address: {walletPubkey.toString()}</p>
           <button onClick={handleCreateToken}>create token</button>
+          <button onClick={handleMintToken}>mint token</button>
           <button onClick={handleTransfer}>transfer token</button>
         </div>
       )}
